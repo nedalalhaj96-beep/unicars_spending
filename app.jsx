@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+const { useState, useEffect, useRef, useMemo } = React;
 
 const GREEN = "#1D9E75";
 const GREEN_L = "#25C896";
@@ -174,7 +174,7 @@ const BtnC = ({ children, bg, onClick, full, small }) => (
   <button onClick={onClick} style={{ padding: small ? "8px 14px" : "11px 16px", borderRadius: 10, border: "none", background: bg || GREEN, color: "#fff", fontSize: small ? 12 : 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Cairo'", width: full ? "100%" : "auto", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>{children}</button>
 );
 
-export default function App() {
+function App() {
   const [data, setData] = useState(() => loadData());
   const [page, setPage] = useState("inventory");
   const [showCarForm, setShowCarForm] = useState(false);

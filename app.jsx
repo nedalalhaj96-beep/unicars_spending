@@ -1,4 +1,4 @@
-const { useState, useEffect, useRef, useMemo } = React;
+import { useState, useEffect, useRef, useMemo } from "react";
 
 const GREEN = "#1D9E75";
 const GREEN_L = "#25C896";
@@ -61,8 +61,50 @@ const shareText = (c, sold = false) => {
   return lines.join("\n");
 };
 
-const loadData = () => { try { const r = localStorage.getItem(STORE_KEY); if (r) return JSON.parse(r); } catch {} return { cars: [], lastBackup: null }; };
-const saveData = (d) => { try { localStorage.setItem(STORE_KEY, JSON.stringify(d)); } catch {} };
+// ===== DUAL STORAGE: localStorage + IndexedDB =====
+const IDB_NAME = "unicars_db";
+const IDB_STORE = "data";
+const IDB_KEY = "main";
+
+const openIDB = () => new Promise((resolve, reject) => {
+  const req = indexedDB.open(IDB_NAME, 1);
+  req.onupgradeneeded = () => { req.result.createObjectStore(IDB_STORE); };
+  req.onsuccess = () => resolve(req.result);
+  req.onerror = () => reject(req.error);
+});
+
+const idbGet = async () => {
+  try {
+    const db = await openIDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE, "readonly");
+      const req = tx.objectStore(IDB_STORE).get(IDB_KEY);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch { return null; }
+};
+
+const idbSet = async (d) => {
+  try {
+    const db = await openIDB();
+    const tx = db.transaction(IDB_STORE, "readwrite");
+    tx.objectStore(IDB_STORE).put(d, IDB_KEY);
+  } catch {}
+};
+
+const loadData = () => {
+  try {
+    const r = localStorage.getItem(STORE_KEY);
+    if (r) return JSON.parse(r);
+  } catch {}
+  return { cars: [], lastBackup: null };
+};
+
+const saveData = (d) => {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(d)); } catch {}
+  idbSet(d);
+};
 
 const S = {
   bg: "#f7f8fa", card: "#ffffff", input: "#f2f3f5", border: "#e4e6ea", borderLight: "#eef0f2",
@@ -132,7 +174,7 @@ const BtnC = ({ children, bg, onClick, full, small }) => (
   <button onClick={onClick} style={{ padding: small ? "8px 14px" : "11px 16px", borderRadius: 10, border: "none", background: bg || GREEN, color: "#fff", fontSize: small ? 12 : 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Cairo'", width: full ? "100%" : "auto", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>{children}</button>
 );
 
-function App() {
+export default function App() {
   const [data, setData] = useState(() => loadData());
   const [page, setPage] = useState("inventory");
   const [showCarForm, setShowCarForm] = useState(false);
@@ -150,8 +192,22 @@ function App() {
   const [backupPrompt, setBackupPrompt] = useState(false);
   const fileRef = useRef(null);
 
+  // On mount: if localStorage was empty, try IndexedDB recovery
+  useEffect(() => {
+    if (data.cars.length === 0) {
+      idbGet().then(idbData => {
+        if (idbData && idbData.cars && idbData.cars.length > 0) {
+          setData(idbData);
+          try { localStorage.setItem(STORE_KEY, JSON.stringify(idbData)); } catch {}
+          setToast("تم استرجاع البيانات تلقائياً");
+          setTimeout(() => setToast(null), 3000);
+        }
+      });
+    }
+  }, []);
+
   useEffect(() => { saveData(data); }, [data]);
-  useEffect(() => { if (data.cars.length > 0 && (!data.lastBackup || Date.now() - data.lastBackup > 259200000)) setBackupPrompt(true); }, []);
+  useEffect(() => { if (data.cars.length > 0 && (!data.lastBackup || Date.now() - data.lastBackup > 86400000)) setBackupPrompt(true); }, []);
 
   const flash = (m) => { setToast(m); setTimeout(() => setToast(null), 2500); };
   const updCars = (fn) => setData(d => ({ ...d, cars: fn(d.cars) }));
